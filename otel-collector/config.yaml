@@ -1,0 +1,94 @@
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  # Batch sends reduce overhead
+  batch:
+    timeout: 5s
+    send_batch_size: 512
+
+  # Add resource attributes to all telemetry
+  resource:
+    attributes:
+      - key: deployment.environment
+        value: "local"
+        action: upsert
+
+  # Memory limiter — prevents OOM in local dev
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 256
+    spike_limit_mib: 64
+
+  # Convert OTEL log records → Loki-compatible format
+  # (adds a log attribute hint so Loki can index service.name as service_name)
+  attributes/loki:
+    actions:
+      - key: service_name
+        from_attribute: service.name
+        action: insert
+      - key: loki.attribute.labels
+        value: service_name
+        action: insert
+
+exporters:
+  # ── Traces → Tempo ──────────────────────────────────────────────────────────
+  otlp/tempo:
+    endpoint: tempo:4317
+    tls:
+      insecure: true
+
+  # ── Metrics → Prometheus (scrape endpoint) ──────────────────────────────────
+  prometheus:
+    endpoint: "0.0.0.0:8889"
+    namespace: banksim
+    resource_to_telemetry_conversion:
+      enabled: true   # Adds service_name label to all metrics
+
+  # ── Logs → Loki ─────────────────────────────────────────────────────────────
+  loki:
+    endpoint: http://loki:3100/loki/api/v1/push
+    tls:
+      insecure: true
+    default_labels_enabled:
+      exporter: false
+      job: true
+
+  # Debug exporter — prints to collector stdout (useful while learning)
+  debug:
+    verbosity: basic
+
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+  pprof:
+    endpoint: 0.0.0.0:1777
+  zpages:
+    endpoint: 0.0.0.0:55679
+
+service:
+  extensions: [health_check, pprof, zpages]
+
+  pipelines:
+    # Traces: OTLP in → batch → Tempo
+    traces:
+      receivers:  [otlp]
+      processors: [memory_limiter, batch]
+      exporters:  [otlp/tempo, debug]
+
+    # Metrics: OTLP in → batch → Prometheus scrape endpoint
+    metrics:
+      receivers:  [otlp]
+      processors: [memory_limiter, resource, batch]
+      exporters:  [prometheus]
+
+    # Logs: OTLP in → label enrichment → Loki
+    logs:
+      receivers:  [otlp]
+      processors: [memory_limiter, attributes/loki, batch]
+      exporters:  [loki, debug]

@@ -1,0 +1,114 @@
+{
+  "uid": "banksim-ops",
+  "title": "BankSim — Operations Dashboard",
+  "description": "DB query latency, connection pool, fraud rules, Go runtime, test results",
+  "tags": ["banksim", "db", "fraud", "runtime", "tests"],
+  "refresh": "10s",
+  "time": { "from": "now-30m", "to": "now" },
+  "panels": [
+    {
+      "id": 20, "type": "row", "gridPos": {"x":0,"y":0,"w":24,"h":1},
+      "title": "🗄️  Database"
+    },
+    {
+      "id": 21, "type": "timeseries", "gridPos": {"x":0,"y":1,"w":12,"h":8},
+      "title": "DB Query Duration — p50/p95/p99",
+      "datasource": {"type":"prometheus","uid":"prometheus"},
+      "fieldConfig": {"defaults":{"unit":"s"}},
+      "targets": [
+        {"expr":"histogram_quantile(0.50, sum(rate(banksim_ledger_db_query_duration_seconds_bucket[5m])) by (le, operation, table))","legendFormat":"p50 {{operation}}/{{table}}","refId":"A"},
+        {"expr":"histogram_quantile(0.95, sum(rate(banksim_ledger_db_query_duration_seconds_bucket[5m])) by (le, operation, table))","legendFormat":"p95 {{operation}}/{{table}}","refId":"B"},
+        {"expr":"histogram_quantile(0.99, sum(rate(banksim_ledger_db_query_duration_seconds_bucket[5m])) by (le, operation, table))","legendFormat":"p99 {{operation}}/{{table}}","refId":"C"}
+      ]
+    },
+    {
+      "id": 22, "type": "timeseries", "gridPos": {"x":12,"y":1,"w":12,"h":8},
+      "title": "DB Connection Pool — Active Connections & Wait Time",
+      "datasource": {"type":"prometheus","uid":"prometheus"},
+      "fieldConfig": {"defaults":{}},
+      "targets": [
+        {"expr":"banksim_ledger_db_pool_active","legendFormat":"active connections","refId":"A"},
+        {"expr":"histogram_quantile(0.95, rate(banksim_ledger_db_pool_wait_seconds_bucket[5m]))","legendFormat":"p95 pool wait","refId":"B"}
+      ]
+    },
+    {
+      "id": 30, "type": "row", "gridPos": {"x":0,"y":9,"w":24,"h":1},
+      "title": "🚨  Fraud Engine"
+    },
+    {
+      "id": 31, "type": "stat", "gridPos": {"x":0,"y":10,"w":6,"h":4},
+      "title": "Fraud Checks/s",
+      "datasource": {"type":"prometheus","uid":"prometheus"},
+      "fieldConfig": {"defaults":{"unit":"reqps"}},
+      "options": {"colorMode":"background","reduceOptions":{"calcs":["lastNotNull"]}},
+      "targets": [{"expr":"rate(banksim_fraud_checks_total[1m])","legendFormat":"checks/s","refId":"A"}]
+    },
+    {
+      "id": 32, "type": "stat", "gridPos": {"x":6,"y":10,"w":6,"h":4},
+      "title": "Flagged/s",
+      "datasource": {"type":"prometheus","uid":"prometheus"},
+      "fieldConfig": {"defaults":{"unit":"reqps","color":{"fixedColor":"red","mode":"fixed"}}},
+      "options": {"colorMode":"background","reduceOptions":{"calcs":["lastNotNull"]}},
+      "targets": [{"expr":"rate(banksim_fraud_flagged_total[1m])","legendFormat":"flagged/s","refId":"A"}]
+    },
+    {
+      "id": 33, "type": "timeseries", "gridPos": {"x":0,"y":14,"w":12,"h":8},
+      "title": "Fraud Flagged by Reason",
+      "datasource": {"type":"prometheus","uid":"prometheus"},
+      "fieldConfig": {"defaults":{"unit":"short"}},
+      "targets": [
+        {"expr":"sum(rate(banksim_fraud_flagged_total[5m])) by (reason)","legendFormat":"{{reason}}","refId":"A"}
+      ]
+    },
+    {
+      "id": 34, "type": "timeseries", "gridPos": {"x":12,"y":14,"w":12,"h":8},
+      "title": "Fraud Rule Evaluation Latency",
+      "datasource": {"type":"prometheus","uid":"prometheus"},
+      "fieldConfig": {"defaults":{"unit":"s"}},
+      "targets": [
+        {"expr":"histogram_quantile(0.95, sum(rate(banksim_fraud_rule_duration_seconds_bucket[5m])) by (le, rule))","legendFormat":"p95 {{rule}}","refId":"A"},
+        {"expr":"histogram_quantile(0.99, sum(rate(banksim_fraud_rule_duration_seconds_bucket[5m])) by (le, rule))","legendFormat":"p99 {{rule}}","refId":"B"}
+      ]
+    },
+    {
+      "id": 40, "type": "row", "gridPos": {"x":0,"y":22,"w":24,"h":1},
+      "title": "✅  Integration Test Results"
+    },
+    {
+      "id": 41, "type": "stat", "gridPos": {"x":0,"y":23,"w":6,"h":4},
+      "title": "Tests Passed",
+      "datasource": {"type":"prometheus","uid":"prometheus"},
+      "options": {"colorMode":"background","reduceOptions":{"calcs":["lastNotNull"]}},
+      "fieldConfig": {"defaults":{"color":{"fixedColor":"green","mode":"fixed"}}},
+      "targets": [{"expr":"banksim_test_passed_total","legendFormat":"passed","refId":"A"}]
+    },
+    {
+      "id": 42, "type": "stat", "gridPos": {"x":6,"y":23,"w":6,"h":4},
+      "title": "Tests Failed",
+      "datasource": {"type":"prometheus","uid":"prometheus"},
+      "options": {"colorMode":"background","reduceOptions":{"calcs":["lastNotNull"]}},
+      "fieldConfig": {"defaults":{"color":{"mode":"thresholds"},"thresholds":{"steps":[{"color":"green","value":null},{"color":"red","value":1}]}}},
+      "targets": [{"expr":"banksim_test_failed_total","legendFormat":"failed","refId":"A"}]
+    },
+    {
+      "id": 43, "type": "stat", "gridPos": {"x":12,"y":23,"w":6,"h":4},
+      "title": "Last Test Run",
+      "datasource": {"type":"prometheus","uid":"prometheus"},
+      "options": {"colorMode":"background","reduceOptions":{"calcs":["lastNotNull"]}},
+      "fieldConfig": {"defaults":{"unit":"dateTimeAsIso"}},
+      "targets": [{"expr":"banksim_test_run_timestamp_seconds * 1000","legendFormat":"last run","refId":"A"}]
+    },
+    {
+      "id": 44, "type": "bargauge", "gridPos": {"x":0,"y":27,"w":24,"h":8},
+      "title": "Test Duration by Test Case",
+      "datasource": {"type":"prometheus","uid":"prometheus"},
+      "options": {"orientation":"horizontal","reduceOptions":{"calcs":["lastNotNull"]},"displayMode":"gradient"},
+      "fieldConfig": {"defaults":{"unit":"s","color":{"mode":"thresholds"},"thresholds":{"steps":[{"color":"green","value":null},{"color":"yellow","value":1},{"color":"red","value":5}]}}},
+      "targets": [
+        {"expr":"banksim_test_duration_seconds","legendFormat":"{{test}} ({{outcome}})","refId":"A"}
+      ]
+    }
+  ],
+  "schemaVersion": 38,
+  "version": 1
+}

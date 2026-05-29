@@ -1,0 +1,24 @@
+global:
+  scrape_interval: 10s
+  evaluation_interval: 10s
+
+scrape_configs:
+  # OTEL Collector exposes all app metrics on :8889
+  - job_name: banksim
+    static_configs:
+      - targets: ["otel-collector:8889"]
+    metric_relabel_configs:
+      # Keep service_name label from OTEL resource attributes
+      - source_labels: [service_name]
+        target_label: service
+
+  # Pushgateway — test results pushed by tests/main.go
+  - job_name: pushgateway
+    honor_labels: true
+    static_configs:
+      - targets: ["pushgateway:9091"]
+
+  # Prometheus self-monitoring
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]

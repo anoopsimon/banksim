@@ -1,0 +1,174 @@
+# ═══════════════════════════════════════════════════════════════
+#  docker compose up --build
+#
+#  Services:
+#    gateway      :8080   — Banking REST API
+#    fraud-svc    :8081   — Fraud evaluation engine
+#    ledger-svc   :8082   — Transaction ledger
+#    loadgen             — Continuous traffic generator
+#    otel-collector      — OTEL pipeline (traces/metrics/logs)
+#    prometheus   :9090   — Metrics store
+#    tempo        :3200   — Trace store
+#    loki         :3100   — Log store
+#    pushgateway  :9091   — Test result metrics
+#    grafana      :3000   — Dashboards (admin/admin)
+# ═══════════════════════════════════════════════════════════════
+
+networks:
+  banksim:
+    driver: bridge
+
+volumes:
+  prometheus_data:
+  tempo_data:
+  loki_data:
+  grafana_data:
+
+services:
+
+  # ── Application services ─────────────────────────────────────────────────────
+
+  gateway:
+    build:
+      context: ./services/gateway
+      dockerfile: ../../Dockerfile.service
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: otel-collector:4317
+      FRAUD_SVC_ADDR:  http://fraud-svc:8081
+      LEDGER_SVC_ADDR: http://ledger-svc:8082
+    ports:
+      - "8080:8080"
+    depends_on:
+      otel-collector:
+        condition: service_started
+    networks: [banksim]
+    restart: unless-stopped
+
+  fraud-svc:
+    build:
+      context: ./services/fraud-svc
+      dockerfile: ../../Dockerfile.service
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: otel-collector:4317
+    ports:
+      - "8081:8081"
+    depends_on:
+      otel-collector:
+        condition: service_started
+    networks: [banksim]
+    restart: unless-stopped
+
+  ledger-svc:
+    build:
+      context: ./services/ledger-svc
+      dockerfile: ../../Dockerfile.service
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: otel-collector:4317
+    ports:
+      - "8082:8082"
+    depends_on:
+      otel-collector:
+        condition: service_started
+    networks: [banksim]
+    restart: unless-stopped
+
+  loadgen:
+    build:
+      context: ./loadgen
+      dockerfile: ../Dockerfile.service
+    environment:
+      GATEWAY_ADDR: http://gateway:8080
+    depends_on:
+      - gateway
+    networks: [banksim]
+    restart: unless-stopped
+
+  tests:
+    build:
+      context: ./tests
+      dockerfile: ../Dockerfile.service
+    environment:
+      GATEWAY_ADDR: http://gateway:8080
+      PUSHGATEWAY_ADDR: http://pushgateway:9091
+    depends_on:
+      - gateway
+      - pushgateway
+    networks: [banksim]
+
+  # ── OTEL Pipeline ────────────────────────────────────────────────────────────
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.112.0
+    command: ["--config=/etc/otel-collector/config.yaml"]
+    volumes:
+      - ./otel-collector/config.yaml:/etc/otel-collector/config.yaml:ro
+    ports:
+      - "4317:4317"   # OTLP gRPC
+      - "4318:4318"   # OTLP HTTP
+      - "8889:8889"   # Prometheus scrape endpoint
+      - "13133:13133" # Health check
+      - "55679:55679" # zPages debug UI
+    networks: [banksim]
+
+  # ── Observability Backend ────────────────────────────────────────────────────
+
+  prometheus:
+    image: prom/prometheus:v2.55.0
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.enable-remote-write-receiver"
+      - "--enable-feature=exemplar-storage"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    networks: [banksim]
+
+  tempo:
+    image: grafana/tempo:2.6.1
+    command: ["-config.file=/etc/tempo/tempo.yaml"]
+    volumes:
+      - ./tempo/tempo.yaml:/etc/tempo/tempo.yaml:ro
+      - tempo_data:/var/tempo
+    ports:
+      - "3200:3200"   # Tempo HTTP API
+      - "9095:9095"   # Tempo gRPC
+    networks: [banksim]
+
+  loki:
+    image: grafana/loki:3.2.1
+    command: ["-config.file=/etc/loki/loki.yaml"]
+    volumes:
+      - ./loki/loki.yaml:/etc/loki/loki.yaml:ro
+      - loki_data:/loki
+    ports:
+      - "3100:3100"
+    networks: [banksim]
+
+  pushgateway:
+    image: prom/pushgateway:v1.10.0
+    ports:
+      - "9091:9091"
+    networks: [banksim]
+
+  grafana:
+    image: grafana/grafana:11.3.0
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: "Admin"
+      GF_AUTH_DISABLE_LOGIN_FORM: "false"
+      GF_FEATURE_TOGGLES_ENABLE: "traceqlEditor tempoServiceGraph"
+      GF_INSTALL_PLUGINS: "grafana-piechart-panel"
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/etc/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+      - tempo
+      - loki
+    networks: [banksim]

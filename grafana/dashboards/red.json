@@ -1,0 +1,100 @@
+{
+  "uid": "banksim-red",
+  "title": "BankSim — RED Dashboard",
+  "description": "Request Rate, Error Rate, Latency (p50/p95/p99) per service and endpoint",
+  "tags": ["banksim", "red", "latency"],
+  "refresh": "10s",
+  "time": { "from": "now-30m", "to": "now" },
+  "panels": [
+    {
+      "id": 1, "type": "stat", "gridPos": {"x":0,"y":0,"w":4,"h":4},
+      "title": "Request Rate (req/s)",
+      "datasource": {"type":"prometheus","uid":"prometheus"},
+      "options": {"colorMode":"background","graphMode":"area","orientation":"auto","reduceOptions":{"calcs":["lastNotNull"]}},
+      "fieldConfig": {"defaults":{"color":{"mode":"thresholds"},"thresholds":{"steps":[{"color":"green","value":null}]},"unit":"reqps"}},
+      "targets": [{"expr":"sum(rate(banksim_gateway_requests_total[1m]))","legendFormat":"req/s","refId":"A"}]
+    },
+    {
+      "id": 2, "type": "stat", "gridPos": {"x":4,"y":0,"w":4,"h":4},
+      "title": "Error Rate",
+      "datasource": {"type":"prometheus","uid":"prometheus"},
+      "options": {"colorMode":"background","graphMode":"area","reduceOptions":{"calcs":["lastNotNull"]}},
+      "fieldConfig": {"defaults":{"color":{"mode":"thresholds"},"thresholds":{"steps":[{"color":"green","value":null},{"color":"yellow","value":0.01},{"color":"red","value":0.05}]},"unit":"percentunit"}},
+      "targets": [{"expr":"sum(rate(banksim_gateway_errors_total[1m])) / sum(rate(banksim_gateway_requests_total[1m]))","legendFormat":"error rate","refId":"A"}]
+    },
+    {
+      "id": 3, "type": "stat", "gridPos": {"x":8,"y":0,"w":4,"h":4},
+      "title": "p99 Latency",
+      "datasource": {"type":"prometheus","uid":"prometheus"},
+      "options": {"colorMode":"background","reduceOptions":{"calcs":["lastNotNull"]}},
+      "fieldConfig": {"defaults":{"color":{"mode":"thresholds"},"thresholds":{"steps":[{"color":"green","value":null},{"color":"yellow","value":0.5},{"color":"red","value":1.0}]},"unit":"s"}},
+      "targets": [{"expr":"histogram_quantile(0.99, sum(rate(banksim_gateway_request_duration_seconds_bucket[5m])) by (le))","legendFormat":"p99","refId":"A"}]
+    },
+    {
+      "id": 4, "type": "stat", "gridPos": {"x":12,"y":0,"w":4,"h":4},
+      "title": "Fraud Block Rate",
+      "datasource": {"type":"prometheus","uid":"prometheus"},
+      "options": {"colorMode":"background","reduceOptions":{"calcs":["lastNotNull"]}},
+      "fieldConfig": {"defaults":{"color":{"mode":"thresholds"},"thresholds":{"steps":[{"color":"green","value":null},{"color":"yellow","value":0.08},{"color":"red","value":0.15}]},"unit":"percentunit"}},
+      "targets": [{"expr":"sum(rate(banksim_fraud_flagged_total[5m])) / sum(rate(banksim_fraud_checks_total[5m]))","legendFormat":"fraud rate","refId":"A"}]
+    },
+    {
+      "id": 5, "type": "stat", "gridPos": {"x":16,"y":0,"w":4,"h":4},
+      "title": "Active Requests",
+      "datasource": {"type":"prometheus","uid":"prometheus"},
+      "options": {"colorMode":"background","reduceOptions":{"calcs":["lastNotNull"]}},
+      "fieldConfig": {"defaults":{"color":{"mode":"thresholds"},"thresholds":{"steps":[{"color":"green","value":null},{"color":"yellow","value":20},{"color":"red","value":50}]}}},
+      "targets": [{"expr":"banksim_gateway_requests_inflight","legendFormat":"inflight","refId":"A"}]
+    },
+    {
+      "id": 6, "type": "stat", "gridPos": {"x":20,"y":0,"w":4,"h":4},
+      "title": "Ledger Commits",
+      "datasource": {"type":"prometheus","uid":"prometheus"},
+      "options": {"colorMode":"background","reduceOptions":{"calcs":["lastNotNull"]}},
+      "fieldConfig": {"defaults":{"color":{"mode":"thresholds"},"thresholds":{"steps":[{"color":"green","value":null}]},"unit":"reqps"}},
+      "targets": [{"expr":"rate(banksim_ledger_commits_total[1m])","legendFormat":"commits/s","refId":"A"}]
+    },
+    {
+      "id": 10, "type": "timeseries", "gridPos": {"x":0,"y":4,"w":12,"h":8},
+      "title": "Request Rate by Endpoint",
+      "datasource": {"type":"prometheus","uid":"prometheus"},
+      "fieldConfig": {"defaults":{"unit":"reqps"},"overrides":[]},
+      "options": {"legend":{"displayMode":"table","placement":"bottom"},"tooltip":{"mode":"multi"}},
+      "targets": [
+        {"expr":"sum(rate(banksim_gateway_requests_total[1m])) by (endpoint)","legendFormat":"{{endpoint}}","refId":"A"}
+      ]
+    },
+    {
+      "id": 11, "type": "timeseries", "gridPos": {"x":12,"y":4,"w":12,"h":8},
+      "title": "Latency Percentiles (p50 / p95 / p99)",
+      "datasource": {"type":"prometheus","uid":"prometheus"},
+      "fieldConfig": {"defaults":{"unit":"s"}},
+      "options": {"legend":{"displayMode":"table","placement":"bottom"}},
+      "targets": [
+        {"expr":"histogram_quantile(0.50, sum(rate(banksim_gateway_request_duration_seconds_bucket[5m])) by (le, endpoint))","legendFormat":"p50 {{endpoint}}","refId":"A"},
+        {"expr":"histogram_quantile(0.95, sum(rate(banksim_gateway_request_duration_seconds_bucket[5m])) by (le, endpoint))","legendFormat":"p95 {{endpoint}}","refId":"B"},
+        {"expr":"histogram_quantile(0.99, sum(rate(banksim_gateway_request_duration_seconds_bucket[5m])) by (le, endpoint))","legendFormat":"p99 {{endpoint}}","refId":"C"}
+      ]
+    },
+    {
+      "id": 12, "type": "timeseries", "gridPos": {"x":0,"y":12,"w":12,"h":8},
+      "title": "Error Rate by Reason",
+      "datasource": {"type":"prometheus","uid":"prometheus"},
+      "fieldConfig": {"defaults":{"unit":"reqps","color":{"mode":"palette-classic"}}},
+      "targets": [
+        {"expr":"sum(rate(banksim_gateway_errors_total[1m])) by (reason)","legendFormat":"{{reason}}","refId":"A"}
+      ]
+    },
+    {
+      "id": 13, "type": "timeseries", "gridPos": {"x":12,"y":12,"w":12,"h":8},
+      "title": "Fraud Score Distribution (histogram heat)",
+      "datasource": {"type":"prometheus","uid":"prometheus"},
+      "fieldConfig": {"defaults":{"unit":"short"}},
+      "targets": [
+        {"expr":"sum(rate(banksim_fraud_score_distribution_bucket[5m])) by (le)","legendFormat":"le={{le}}","refId":"A"}
+      ]
+    }
+  ],
+  "schemaVersion": 38,
+  "version": 1
+}
