@@ -28,6 +28,15 @@ dashboards auto-provision. Open http://localhost:3000 (admin/admin).
 
 ---
 
+## Grafana Dashboard
+
+![Grafana Dashboard](docs/img/grafana-dashboard-1.png)
+
+The screenshot above shows the BankSim Grafana dashboard with database,
+fraud engine, and integration test panels in one view.
+
+---
+
 ## Run Integration Tests
 
 ```bash
@@ -179,5 +188,4 @@ useful for understanding what the collector is doing.
 7. **Tempo service graph** — derived from trace data, shows service dependency map automatically
 
 ---
-
 
